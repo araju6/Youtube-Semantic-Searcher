@@ -1,20 +1,20 @@
 import torch
-import openai
 import whisper
 from transformers import AutoTokenizer, AutoModel
-from pytube import YouTube
 import os
 import librosa
 import numpy as np
 import yt_dlp
 
 class Transcribe:
-    def __init__(self, url) -> None:
+    def __init__(self, url, batch_size=32) -> None:
         self.url = url
+        self.batch_size = batch_size
         self.whisper = whisper.load_model("base")
         self.tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
         self.encoder_model = AutoModel.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
-
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.encoder_model = self.encoder_model.to(self.device)
         self.audio_filepath = None
         self.transcription_chunks = []
         self.encoded_chunks = []
@@ -26,16 +26,15 @@ class Transcribe:
                 os.makedirs(download_folder)
 
             ydl_opts = {
-                'format': 'bestaudio/best',  # Download best audio quality
-                'outtmpl': os.path.join(download_folder, 'audio_file.%(ext)s'),  # Output filename
+                'format': 'bestaudio/best',
+                'outtmpl': os.path.join(download_folder, 'audio_file.%(ext)s'),
                 'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',  # Extract audio only
-                    'preferredcodec': 'mp3',     # Convert to MP3
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
                 }],
-                'quiet': True, 
+                'quiet': True,
             }
 
-            # Download the video and extract audio
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([self.url])
 
@@ -53,11 +52,10 @@ class Transcribe:
         return f"{minutes:02d}:{seconds:02d}"
 
     def text(self):
-        # self.download()
         if not self.audio_filepath:
             return None
         try:
-            audio, sr = librosa.load(self.audio_filepath, sr=16000) 
+            audio, sr = librosa.load(self.audio_filepath, sr=16000, dtype=np.float32)
             duration = len(audio) / sr
             chunk_duration = 5.0
             
@@ -89,34 +87,38 @@ class Transcribe:
             return None
 
     def encode(self):
-
         if not self.transcription_chunks:
             return None
         
-        encoded_chunks = []
         try:
-            for chunk in self.transcription_chunks:
-                text = chunk['text']
+            texts = [chunk['text'] for chunk in self.transcription_chunks if chunk['text'].strip()]
+            batch_count = (len(texts) // self.batch_size) + (1 if len(texts) % self.batch_size else 0)
+            all_embeddings = np.zeros((len(texts), 384), dtype=np.float32)
+            
+            for i in range(batch_count):
+                batch_texts = texts[i*self.batch_size : (i+1)*self.batch_size]
+                inputs = self.tokenizer(batch_texts, return_tensors='pt', padding=True, truncation=True, max_length=512).to(self.device)
                 
-                if text.strip():
-                    inputs = self.tokenizer(text, return_tensors='pt', 
-                                          padding=True, truncation=True, max_length=512)
-                    
-                    with torch.no_grad():
-                        outputs = self.encoder_model(**inputs)
-                        embeddings = self.mean_pooling(outputs, inputs['attention_mask'])
-                        embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
-                    
+                with torch.no_grad():
+                    outputs = self.encoder_model(**inputs)
+                    embeddings = self.mean_pooling(outputs, inputs['attention_mask'])
+                    embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
+                    all_embeddings[i*self.batch_size : (i+1)*self.batch_size] = embeddings.cpu().numpy()
+            
+            chunk_idx = 0
+            encoded_chunks = []
+            for chunk in self.transcription_chunks:
+                if chunk['text'].strip():
                     encoded_chunk = {
                         'start_time': chunk['start_time'],
                         'end_time': chunk['end_time'],
-                        'text': text,
+                        'text': chunk['text'],
                         'timestamp': chunk['timestamp'],
-                        'embedding': embeddings.numpy().flatten(),
+                        'embedding': all_embeddings[chunk_idx],
                         'duration': chunk['duration']
                     }
-                    
                     encoded_chunks.append(encoded_chunk)
+                    chunk_idx += 1
             
             self.encoded_chunks = encoded_chunks
             return encoded_chunks
@@ -129,12 +131,11 @@ class Transcribe:
         token_embeddings = model_output[0]
         input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
         return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
-    
 
 if __name__ == "__main__":
-    temp = Transcribe("https://youtu.be/qHR1bGszwTU?si=Rc2bGKCIlq_53oQH")
+    temp = Transcribe("https://youtu.be/qHR1bGszwTU?si=GDDT9_s5ZRv6ji7x")
     temp.download()
+    temp.audio_filepath = "temp_audio/audio_file.mp3"
     temp.text()
     temp.encode()
-
-
+    print(temp.transcription_chunks)
