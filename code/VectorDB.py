@@ -5,9 +5,11 @@ import numpy as np
 from dotenv import load_dotenv
 import hashlib
 
+load_dotenv()
+
 class VectorDBManager:
     def __init__(self, index_name: str = "multimodal-search"):
-        self.dimension = 896
+        self.dimension = 1024
         self.index_name = index_name
         self.pc = Pinecone(api_key=os.getenv("PINECONE_KEY"))
         if self.index_name not in self.pc.list_indexes().names():

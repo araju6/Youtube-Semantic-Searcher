@@ -1,6 +1,6 @@
 import torch
 import whisper
-from transformers import AutoTokenizer, AutoModel
+from transformers import CLIPTextModel, CLIPTokenizer
 import os
 import librosa
 import numpy as np
@@ -11,8 +11,8 @@ class Transcribe:
         self.url = url
         self.batch_size = batch_size
         self.whisper = whisper.load_model("base")
-        self.tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
-        self.encoder_model = AutoModel.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
+        self.tokenizer = CLIPTokenizer.from_pretrained('openai/clip-vit-base-patch32')
+        self.encoder_model = CLIPTextModel.from_pretrained('openai/clip-vit-base-patch32')
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.encoder_model = self.encoder_model.to(self.device)
         self.audio_filepath = None
@@ -91,21 +91,21 @@ class Transcribe:
         try:
             texts = [chunk['text'] for chunk in self.transcription_chunks if chunk['text'].strip()]
             batch_count = (len(texts) // self.batch_size) + (1 if len(texts) % self.batch_size else 0)
-            all_embeddings = np.zeros((len(texts), 384), dtype=np.float32)
+            all_embeddings = np.zeros((len(texts), 512), dtype=np.float32)
             
             for i in range(batch_count):
                 batch_texts = texts[i*self.batch_size : (i+1)*self.batch_size]
-                inputs = self.tokenizer(batch_texts, return_tensors='pt', padding=True, truncation=True, max_length=512).to(self.device)
+                inputs = self.tokenizer(batch_texts, return_tensors='pt', padding=True, truncation=True, max_length=77).to(self.device)
                 
                 with torch.no_grad():
                     outputs = self.encoder_model(**inputs)
-                    embeddings = self.mean_pooling(outputs, inputs['attention_mask'])
+                    embeddings = outputs.pooler_output
                     embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
                     all_embeddings[i*self.batch_size : (i+1)*self.batch_size] = embeddings.cpu().numpy()
             
             chunk_idx = 0
             encoded_chunks = []
-            embedding_dim = all_embeddings.shape[1] if len(all_embeddings) > 0 else 384
+            embedding_dim = all_embeddings.shape[1] if len(all_embeddings) > 0 else 512
             for chunk in self.transcription_chunks:
                 if chunk['text'].strip():
                     encoded_chunk = {
