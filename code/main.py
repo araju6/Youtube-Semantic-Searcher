@@ -8,8 +8,8 @@ from transformers import AutoTokenizer, AutoModel
 import numpy as np
 import pickle
 
-url = "https://www.youtube.com/watch?v=KRqg3RJFWPo&t=224s"
-query = "Green"
+url = "https://www.youtube.com/watch?v=fj1ddeQmIkk"
+query = "black car"
 transcribe = Transcribe(url)
 
 # transcribe.download()
@@ -28,12 +28,12 @@ transcribe = Transcribe(url)
 # with open("embeddings_cache.pkl", "wb") as f:
 #     pickle.dump(concat_embeddings, f)
 
-# try:
-#     with open("embeddings_cache.pkl", "rb") as f:
-#         concat_embeddings = pickle.load(f)
-#     print("Loaded embeddings from cache")
-# except FileNotFoundError:
-#     print("No cache found, processing from scratch")
+try:
+    with open("embeddings_cache.pkl", "rb") as f:
+        concat_embeddings = pickle.load(f)
+    print("Loaded embeddings from cache")
+except FileNotFoundError:
+    print("No cache found, processing from scratch")
 
 clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
 clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
