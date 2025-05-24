@@ -4,3 +4,5 @@ venv/
 **mp4
 temp_video/
 temp_audio/
+.env
+embeddings_cache.pkl

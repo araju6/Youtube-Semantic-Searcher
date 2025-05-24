@@ -29,12 +29,17 @@ numba==0.61.2
 numpy==2.2.6
 openai==1.82.0
 openai-whisper==20240930
+opencv-python==4.11.0.86
 packaging==25.0
+pillow==11.2.1
+pinecone==7.0.1
+pinecone-plugin-interface==0.0.7
 platformdirs==4.3.8
 pooch==1.8.2
 pycparser==2.22
 pydantic==2.11.5
 pydantic_core==2.33.2
+python-dateutil==2.9.0.post0
 pytube==15.0.0
 PyYAML==6.0.2
 regex==2024.11.6

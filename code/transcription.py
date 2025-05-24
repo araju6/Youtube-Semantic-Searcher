@@ -57,7 +57,7 @@ class Transcribe:
         try:
             audio, sr = librosa.load(self.audio_filepath, sr=16000, dtype=np.float32)
             duration = len(audio) / sr
-            chunk_duration = 5.0
+            chunk_duration = 10
             
             chunks = []
             print(f"Processing {duration:.1f} seconds of audio in {chunk_duration}s chunks...")
@@ -68,18 +68,16 @@ class Transcribe:
                 end_sample = int(end_time * sr)
                 audio_chunk = audio[start_sample:end_sample]
                 
-                if len(audio_chunk) > 0:
-                    result = self.whisper.transcribe(audio_chunk)
-                    chunk_data = {
-                        'start_time': start_time,
-                        'end_time': end_time,
-                        'text': result['text'].strip(),
-                        'timestamp': self.format_timestamp(start_time),
-                        'duration': end_time - start_time
-                    }
+                result = self.whisper.transcribe(audio_chunk)
+                chunk_data = {
+                    'start_time': float(start_time),
+                    'end_time': float(end_time),
+                    'text': result['text'].strip(),
+                    'timestamp': self.format_timestamp(start_time),
+                    'duration': end_time - start_time
+                }
                     
-                    if chunk_data['text']:
-                        chunks.append(chunk_data)
+                chunks.append(chunk_data)
             self.transcription_chunks = chunks
             return chunks
         except Exception as e:
@@ -107,6 +105,7 @@ class Transcribe:
             
             chunk_idx = 0
             encoded_chunks = []
+            embedding_dim = all_embeddings.shape[1] if len(all_embeddings) > 0 else 384
             for chunk in self.transcription_chunks:
                 if chunk['text'].strip():
                     encoded_chunk = {
@@ -119,6 +118,17 @@ class Transcribe:
                     }
                     encoded_chunks.append(encoded_chunk)
                     chunk_idx += 1
+                else:
+                    empty_embedding = np.zeros(embedding_dim, dtype=np.float32)
+                    encoded_chunk = {
+                        'start_time': chunk['start_time'],
+                        'end_time': chunk['end_time'],
+                        'text': chunk['text'],
+                        'timestamp': chunk['timestamp'],
+                        'embedding': empty_embedding,
+                        'duration': chunk['duration']
+                    }
+                    encoded_chunks.append(encoded_chunk)
             
             self.encoded_chunks = encoded_chunks
             return encoded_chunks
@@ -133,9 +143,9 @@ class Transcribe:
         return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
 
 if __name__ == "__main__":
-    temp = Transcribe("https://youtu.be/qHR1bGszwTU?si=GDDT9_s5ZRv6ji7x")
+    temp = Transcribe("https://www.youtube.com/watch?v=KRqg3RJFWPo&t=224s")
     temp.download()
     temp.audio_filepath = "temp_audio/audio_file.mp3"
     temp.text()
     temp.encode()
-    print(temp.transcription_chunks)
+    print(len(temp.encoded_chunks))

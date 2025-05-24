@@ -7,7 +7,7 @@ from transformers import CLIPProcessor, CLIPModel
 from PIL import Image
 
 class ClipFrameEncoder:
-    def __init__(self, url, chunk_duration=5, frames_per_second=1):
+    def __init__(self, url, chunk_duration=10, frames_per_second=1):
         self.url = url
         self.chunk_duration = chunk_duration
         self.frames_per_second = frames_per_second
@@ -25,7 +25,8 @@ class ClipFrameEncoder:
         ydl_opts = {
             'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4',
             'outtmpl': os.path.join(download_folder, 'video_file.%(ext)s'),
-            'quiet': True
+            'quiet': True,
+            'overwrites': True,
         }
         
         try:
@@ -87,7 +88,7 @@ class ClipFrameEncoder:
         return frame_embeddings
 
 if __name__ == "__main__":
-    clipper = ClipFrameEncoder("https://youtu.be/qHR1bGszwTU?si=GDDT9_s5ZRv6ji7x")
+    clipper = ClipFrameEncoder("https://www.youtube.com/watch?v=KRqg3RJFWPo&t=224s")
     clipper.download()
     clipper.encode()
-    print(len(clipper.frame_embeddings), "embeddings generated (1 per 5-second chunk).")
+    print(clipper.frame_embeddings, "embeddings generated (1 per 5-second chunk).")
